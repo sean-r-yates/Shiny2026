@@ -21,6 +21,12 @@ ui <- fluidPage(
   
   h3("Article Statistics"),
   
-  verbatimTextOutput("stats")
+  verbatimTextOutput("stats"),
+  
+  h3("Sentiment Analysis"),
+  
+  verbatimTextOutput("sentiment_summary"),
+  
+  plotOutput("sentiment_plot", height = "350px")
   
 )

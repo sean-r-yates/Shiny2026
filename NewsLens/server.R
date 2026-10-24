@@ -1,45 +1,48 @@
+
 library(shiny)
 
 server <- function(input, output, session) {
   
+  # ---- MAIN ANALYSIS ----
+  
   analysis <- eventReactive(input$analyse, {
     
-    # Get the article from user
     text <- trimws(input$article)
     
-    if (text == "") {
-      return("Please enter an article.")
-    }
-    
-    # Split the article into words
-    words <- unlist(
-      strsplit(tolower(text), "[^[:alnum:]']+")
+    validate(
+      need(nzchar(text), "Please paste an article first.")
     )
     
-    words <- words[nzchar(words)]
+    # Tokenise the text 
+    words <- tibble::tibble(text = text) |>
+      tidytext::unnest_tokens(word, text) |>
+      dplyr::pull(word)
     
-    # Split into sentences
-    sentences <- unlist(
-      strsplit(text, "[.!?]+")
-    )
-    
+    # Count sentences
+    sentences <- unlist(strsplit(text, "[.!?]+"))
     sentences <- sentences[nzchar(trimws(sentences))]
     
-    # Calculate stuff
-    word_count <- length(words)
-    
-    unique_words <- length(unique(words))
-    
-    sentence_count <- length(sentences)
-    
-    # Display results
-    paste0(
-      "Total words: ", word_count,
-      "\nUnique words: ", unique_words,
-      "\nSentences: ", sentence_count
+    # Calculate basic statistics
+    stats <- list(
+      word_count = length(words),
+      unique_words = length(unique(words)),
+      sentence_count = length(sentences)
     )
     
+    # Pass the processed words to sentiment.R
+    sentiment <- analyse_sentiment(words)
+    
+    # Store all results together
+    return(list(
+      words = words,
+      stats = stats,
+      sentiment = sentiment
+    ))
+    
   })
+  
+  
+  # ---- STATISTICS OUTPUT ----
   
   output$stats <- renderText({
     
@@ -47,7 +50,64 @@ server <- function(input, output, session) {
       return("No article analysed yet.")
     }
     
-    analysis()
+    result <- analysis()$stats
+    
+    paste0(
+      "Total words: ", result$word_count,
+      "\nUnique words: ", result$unique_words,
+      "\nSentences: ", result$sentence_count
+    )
+    
+  })
+  
+  
+  # ---- SENTIMENT OUTPUT ----
+  
+  output$sentiment_summary <- renderText({
+    
+    if (input$analyse == 0) {
+      return("No article analysed yet.")
+    }
+    
+    result <- analysis()$sentiment
+    
+    paste0(
+      "Positive words: ", result$positive,
+      "\nNegative words: ", result$negative,
+      "\nSentiment balance: ", result$balance,
+      "\nInterpretation: ", result$label
+    )
+    
+  })
+  
+  
+  # ---- SENTIMENT CHART ----
+  
+  output$sentiment_plot <- renderPlot({
+    
+    req(input$analyse > 0)
+    
+    result <- analysis()$sentiment
+    
+    validate(
+      need(
+        result$positive + result$negative > 0,
+        "No sentiment words detected."
+      )
+    )
+    
+    counts <- c(
+      Positive = result$positive,
+      Negative = result$negative
+    )
+    
+    barplot(
+      counts,
+      main = "Sentiment Breakdown",
+      xlab = "Sentiment",
+      ylab = "Matched Words",
+      col = c("steelblue", "tomato")
+    )
     
   })
   
